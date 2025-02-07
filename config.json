@@ -1,0 +1,11 @@
+{
+    "data_directory": "/path/to/your/e621/gallery",
+    "stash_url": "http://localhost:9999",
+    "stash_api_key": "YOUR_API_KEY",
+    "overwrite_existing_metadata": true,
+    "import_artist": true,
+    "import_creation_date": true,
+    "import_description": true,
+    "import_tags": true,
+    "import_url": true
+}

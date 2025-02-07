@@ -1,0 +1,5 @@
+requests
+beautifulsoup4
+tqdm
+pandas
+git+https://github.com/Torrafox/e621-metadata-extractor.git

@@ -1,0 +1,23 @@
+# Virtual environment folder
+.venv/
+
+# Python bytecode files
+*.pyc
+*.pyo
+__pycache__/
+
+# IDE-specific files
+.vscode/
+.idea/
+
+# OS-specific files
+.DS_Store
+Thumbs.db
+
+# Generated files
+update_log_*.txt
+stash_backup_*.jsonl
+e621_metadata.csv
+e621_metadata.json
+*.csv.gz
+*.log
