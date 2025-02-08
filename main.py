@@ -1,6 +1,7 @@
 import os
 import sys
 import json
+import re
 import requests
 import pandas as pd
 from tqdm import tqdm
@@ -88,6 +89,8 @@ def process_tags(tag_string):
     log = []
 
     for tag_name in tag_names:
+        tag_name = tag_name.replace("_", " ") # Replace underscores with spaces
+
         if tag_name in existing_tags:
             tag_ids.append(existing_tags[tag_name])  # Use existing tag ID
             log.append(f"Tag '{tag_name}' already exists with ID {existing_tags[tag_name]}.")
@@ -103,6 +106,46 @@ def process_tags(tag_string):
                 log.append(f"Failed to create tag '{tag_name}'.")
     
     return tag_ids, log
+
+# Function to remove DText formatting (in descriptions)
+# See: https://e621.net/help/dtext
+def remove_dtext_formatting(text):
+    """
+    Removes DText formatting from the input text.
+
+    Args:
+        text (str): The input string containing DText formatting.
+
+    Returns:
+        str: The text with DText formatting removed.
+    """
+    # Remove basic formatting tags: [b], [i], [s], [u], [sup], [sub], [spoiler]
+    text = re.sub(r'\[\/?(b|i|s|u|sup|sub|spoiler)\]', '', text)
+
+    # Remove color tags: [color=...]
+    text = re.sub(r'\[color=[^\]]+\]', '', text)
+    text = re.sub(r'\[\/color\]', '', text)
+
+    # Remove inline code: `code`
+    text = re.sub(r'`([^`]*)`', r'\1', text)
+
+    # Remove links: "title":url or [url]
+    #text = re.sub(r'"[^"]+":\S+', '', text)
+    #text = re.sub(r'\[\[([^\|\]]+)\|?[^\]]*\]\]', r'\1', text)
+
+    # Remove post thumbnails: thumb #12345
+    text = re.sub(r'thumb #\d+', '', text)
+
+    # Remove block-level tags: [quote], [code], [header], [list], [section], [table], [thead], [tbody], [tr], [td], [th]
+    text = re.sub(r'\[\/?(quote|code|header|list|section|table|thead|tbody|tr|td|th)[^\]]*\]', '', text)
+
+    # Remove headers: h1. Header, h2. Header, etc.
+    text = re.sub(r'^\s*h[1-6]\.\s*', '', text, flags=re.MULTILINE)
+
+    # Remove any remaining tags in square brackets
+    #text = re.sub(r'\[\/?[^\]]+\]', '', text)
+
+    return text.strip()
 
 # Mutation to create a new tag
 def create_tag(tag_name):
@@ -155,6 +198,7 @@ def update_scene_metadata(metadata):
     data = graphql_request(mutation, variables)
     return data.get("data", {}).get("sceneUpdate")
 
+# Write entity data to a backup file
 def write_to_backup_file(json_data, type, file_name):
     if type == "image":
         json_data["_type"] = "image"
@@ -237,7 +281,8 @@ def process_csv_and_update_metadata(csv_file):
                     metadata["date"] = row["created_at"] if not pd.isna(row["created_at"]) else ""
 
                 if import_details and (overwrite or not entity.get("details")):
-                    metadata["details"] = row["description"] if not pd.isna(row["description"]) else ""
+                    description_without_dtext = remove_dtext_formatting(row["description"]) if not pd.isna(row["description"]) else ""
+                    metadata["details"] = description_without_dtext
 
                 if import_tags and (overwrite or not entity.get("tag_ids")):
                     tag_string = row['tag_string'] if not pd.isna(row['tag_string']) else ""
