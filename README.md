@@ -139,4 +139,4 @@ python restore_backup.py
 
 ## License
 
-This project is licensed under the MIT License.
+This project is licensed under the [GPL-3.0 License](https://github.com/Torrafox/e621-metadata-stash?tab=readme-ov-file#GPL-3.0-1-ov-file).
