@@ -1,4 +1,4 @@
-# e621 Metadata Updater for Stash
+# e621 Metadata >>> Stash
 
 A Python program designed to update metadata for images and videos in [Stash](https://stashapp.cc) using data from the [e621.net](https://e621.net) database. This tool automatically processes your local gallery by comparing file MD5 checksums with the latest database dump from e621, generating metadata, and syncing it with your Stash instance.
 
@@ -30,12 +30,12 @@ A Python program designed to update metadata for images and videos in [Stash](ht
 
 For **Linux/macOS**:
 ```bash
-git clone <repository-url> && cd <repository-directory> && python -m venv venv && source venv/bin/activate && pip install -r requirements.txt
+git clone https://github.com/Torrafox/e621-metadata-stash.git && cd e621-metadata-stash && python -m venv venv && source venv/bin/activate && pip install -r requirements.txt
 ```
 
 For **Windows**:
 ```bash
-git clone <repository-url> && cd <repository-directory> && python -m venv venv && venv\Scripts\activate && pip install -r requirements.txt
+git clone https://github.com/Torrafox/e621-metadata-stash.git && cd e621-metadata-stash && python -m venv venv && venv\Scripts\activate && pip install -r requirements.txt
 ```
 
 <details>
@@ -48,8 +48,8 @@ git clone <repository-url> && cd <repository-directory> && python -m venv venv &
 
 1. **Clone the Repository**:
    ```bash
-   git clone <repository-url>
-   cd <repository-directory>
+   git clone https://github.com/Torrafox/e621-metadata-stash.git
+   cd e621-metadata-stash
    ```
 
 2. **Set Up Virtual Environment**:
