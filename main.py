@@ -79,34 +79,6 @@ def get_all_tags():
     tags = response.get("data", {}).get("findTags", {}).get("tags", [])
     return {tag['name']: tag['id'] for tag in tags}  # Return a dictionary {name: id}
 
-def process_tags(tag_string):
-    """
-    Ensure all tags in tag_string exist and return their corresponding IDs.
-    """
-    tag_names = tag_string.split()  # Split tag_string into individual tags
-    existing_tags = get_all_tags()  # Retrieve all existing tags
-    tag_ids = []  # List to store tag IDs
-    log = []
-
-    for tag_name in tag_names:
-        tag_name = tag_name.replace("_", " ") # Replace underscores with spaces
-
-        if tag_name in existing_tags:
-            tag_ids.append(existing_tags[tag_name])  # Use existing tag ID
-            log.append(f"Tag '{tag_name}' already exists with ID {existing_tags[tag_name]}.")
-        else:
-            # Create a new tag
-            new_tag = create_tag(tag_name)
-            if new_tag:
-                write_to_backup_file(new_tag, "tag", backup_file)
-                existing_tags[tag_name] = new_tag['id']  # Update local cache
-                tag_ids.append(new_tag['id'])  # Add new tag ID
-                log.append(f"Tag '{tag_name}' created with ID {new_tag['id']}.")
-            else:
-                log.append(f"Failed to create tag '{tag_name}'.")
-    
-    return tag_ids, log
-
 # Function to remove DText formatting (in descriptions)
 # See: https://e621.net/help/dtext
 def remove_dtext_formatting(text):
@@ -241,6 +213,9 @@ def process_csv_and_update_metadata(csv_file):
     skipped_tags_count = 0    
     log = []
 
+    if import_tags:
+        existing_tags = get_all_tags()
+
     # Use tqdm for progress bar
     with tqdm(total=total_files, desc="Processing files", unit="file") as pbar:
         for _, row in df.iterrows():
@@ -257,7 +232,7 @@ def process_csv_and_update_metadata(csv_file):
                 entity_type = "Scene"
             else:
                 skipped_files_count += 1
-                log.append(f"File {checksum}: Skipped (unsupported file type \"{file_ext}\").")
+                log.append(f"Skipped File {checksum}: Unsupported file type \"{file_ext}\".")
                 pbar.update(1)
                 pbar.set_postfix(OrderedDict([
                     ("updated", updated_count),
@@ -268,6 +243,9 @@ def process_csv_and_update_metadata(csv_file):
                 continue
 
             if entity:
+                entity["tag_ids"] = [tag["id"] for tag in entity["tags"]]
+                entity["url"] = entity["urls"][0] if entity.get("urls") else ""
+
                 metadata = {}
                 metadata["id"] = entity["id"]
 
@@ -278,7 +256,9 @@ def process_csv_and_update_metadata(csv_file):
                     # Use full artist_string as photographer/director
                     # artist = row["artist_string"] if not pd.isna(row["artist_string"]) else ""
                 if import_date and (overwrite or not entity.get("date")):
-                    metadata["date"] = row["created_at"] if not pd.isna(row["created_at"]) else ""
+                    # e621 date format: "2008-02-16 23:27:56.919865"
+                    # Stash date format: "2008-02-16"
+                    metadata["date"] = row["created_at"][:10]  # Extract the first 10 characters
 
                 if import_details and (overwrite or not entity.get("details")):
                     description_without_dtext = remove_dtext_formatting(row["description"]) if not pd.isna(row["description"]) else ""
@@ -286,13 +266,30 @@ def process_csv_and_update_metadata(csv_file):
 
                 if import_tags and (overwrite or not entity.get("tag_ids")):
                     tag_string = row['tag_string'] if not pd.isna(row['tag_string']) else ""
-                    tag_ids, tag_log = process_tags(tag_string)
-                    log.extend(tag_log)
+                    tag_names = tag_string.split()
+                    tag_ids = []  # List to store tag IDs
 
-                    # Count tag operations
-                    created_tags_count += sum(1 for entry in tag_log if "created" in entry.lower())
-                    skipped_tags_count += sum(1 for entry in tag_log if "already exists" in entry.lower())
-                    
+                    for tag_name in tag_names:
+                        tag_name = tag_name.replace("_", " ")
+
+                        if tag_name in existing_tags:
+                            tag_ids.append(existing_tags[tag_name])
+                            # this will flood the log if uncommented:
+                            # log.append(f"Tag '{tag_name}' already exists with ID {existing_tags[tag_name]}.")
+                        else:
+                            # Create a new tag
+                            new_tag = create_tag(tag_name)
+                            if new_tag:
+                                write_to_backup_file(new_tag, "tag", backup_file)
+                                existing_tags[tag_name] = new_tag['id']
+                                tag_ids.append(new_tag['id'])
+
+                                created_tags_count += 1
+                                log.append(f"Tag '{tag_name}' created with ID {new_tag['id']}.")
+                            else:
+                                skipped_tags_count += 1
+                                log.append(f"Failed to create tag '{tag_name}'.")
+
                     metadata["tag_ids"] = tag_ids
 
                 if import_url and (overwrite or not entity.get("url")):
@@ -302,16 +299,31 @@ def process_csv_and_update_metadata(csv_file):
                 if entity_type == "Image":
                     if import_artist and (overwrite or not entity.get("photographer")):
                         metadata["photographer"] = artist
-                    write_to_backup_file(entity, "image", backup_file)
-                    update_image_metadata(metadata)
+
+                    needs_update = any(metadata.get(key) != entity.get(key) for key in metadata.keys())
+                    if needs_update:
+                        write_to_backup_file(entity, "image", backup_file)
+                        update_image_metadata(metadata)
+
+                        updated_count += 1
+                        log.append(f"{entity_type} #{metadata["id"]} ({checksum}): Updated successfully.")
+                    else:
+                        #skipped_files_count += 1
+                        log.append(f"Skipped {entity_type} #{metadata["id"]} ({checksum}): No metadata to update.")
                 elif entity_type == "Scene":
                     if import_artist and (overwrite or not entity.get("director")):
                         metadata["director"] = artist
-                    write_to_backup_file(entity, "scene", backup_file)
-                    update_scene_metadata(metadata)
 
-                updated_count += 1
-                log.append(f"{entity_type} {checksum}: Updated successfully.")
+                    needs_update = any(metadata.get(key) != entity.get(key) for key in metadata.keys())
+                    if needs_update:
+                        write_to_backup_file(entity, "scene", backup_file)
+                        update_scene_metadata(metadata)
+
+                        updated_count += 1
+                        log.append(f"{entity_type} #{metadata["id"]} ({checksum}): Updated successfully.")
+                    else:
+                        #skipped_files_count += 1
+                        log.append(f"Skipped {entity_type} #{metadata["id"]} ({checksum}): No metadata to update.")
             else:
                 skipped_files_count += 1
                 log.append(f"{entity_type} {checksum}: Not found in Stash DB.")
